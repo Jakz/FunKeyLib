@@ -38,10 +38,7 @@ extern "C" {
 
 #include <SDL/SDL.h>
 #include <SDL/SDL_ttf.h>
-
-#if FUNKEY_S
 #include <SDL/SDL_image.h>
-#endif
 
 #define HAS_MENU_VOLUME
 #define HAS_MENU_BRIGHTNESS
@@ -143,10 +140,10 @@ extern "C" {
   typedef int64_t fkmenu_t;
 
   /* inits a new menu and returns a handle to manage it */
-  extern void FK_InitMenu(fkmenu_t& handle);
+  //extern void FK_InitMenu(fkmenu_t& handle);
 
   /* releases all menu resources */
-  extern void FK_StopMenu(fkmenu_t& handle);
+  //extern void FK_StopMenu(fkmenu_t& handle);
   
 #ifdef __cplusplus
 }

@@ -27,8 +27,19 @@
  *  @file FK_menu.c
  *  This is the menu API for the FunKey retro gaming console library
  */
-
 #include "menu.h"
+
+#if defined(_WIN32)
+struct Platform
+{
+	static FILE* platformPopen(const char* command, const char* type) { return nullptr; }
+};
+#else
+struct Platform
+{
+	static FILE* platformPopen(const char* command, const char* type) { return popen(command, type); }
+};
+#endif
 
  /// -------------- DEFINES --------------
 
@@ -496,7 +507,7 @@ static void init_menu_system_values(void)
 
 #ifdef HAS_MENU_VOLUME
 	/// ------- Get system volume percentage --------
-	fp = popen(SHELL_CMD_VOLUME_GET, "r");
+	fp = Platform::platformPopen(SHELL_CMD_VOLUME_GET, "r");
 	if (fp == NULL) {
 		MENU_ERROR_PRINTF("Failed to run command %s\n", SHELL_CMD_VOLUME_GET);
 		volume_percentage = 50; ///wrong value: setting default to 50
@@ -517,7 +528,7 @@ static void init_menu_system_values(void)
 #endif
 #ifdef HAS_MENU_BRIGHTNESS
 	/// ------- Get system brightness percentage -------
-	fp = popen(SHELL_CMD_BRIGHTNESS_GET, "r");
+	fp = Platform::platformPopen(SHELL_CMD_BRIGHTNESS_GET, "r");
 	if (fp == NULL) {
 		MENU_ERROR_PRINTF("Failed to run command %s\n", SHELL_CMD_BRIGHTNESS_GET);
 		brightness_percentage = 50; ///wrong value: setting default to 50
@@ -1007,7 +1018,7 @@ int FK_RunMenu(SDL_Surface* screen)
 
 							/// ----- Shell cmd ----
 							sprintf(shell_cmd, "%s %d", SHELL_CMD_VOLUME_SET, volume_percentage);
-							fp = popen(shell_cmd, "r");
+							fp = Platform::platformPopen(shell_cmd, "r");
 							if (fp == NULL) {
 								MENU_ERROR_PRINTF("Failed to run command %s\n", shell_cmd);
 							}
@@ -1026,7 +1037,7 @@ int FK_RunMenu(SDL_Surface* screen)
 
 								/// ----- Shell cmd ----
 								sprintf(shell_cmd, "%s %d", SHELL_CMD_BRIGHTNESS_SET, brightness_percentage);
-								fp = popen(shell_cmd, "r");
+								fp = Platform::platformPopen(shell_cmd, "r");
 								if (fp == NULL) {
 									MENU_ERROR_PRINTF("Failed to run command %s\n", shell_cmd);
 								}
@@ -1088,7 +1099,7 @@ int FK_RunMenu(SDL_Surface* screen)
 
 							/// ----- Shell cmd ----
 							sprintf(shell_cmd, "%s %d", SHELL_CMD_VOLUME_SET, volume_percentage);
-							fp = popen(shell_cmd, "r");
+							fp = Platform::platformPopen(shell_cmd, "r");
 							if (fp == NULL) {
 								MENU_ERROR_PRINTF("Failed to run command %s\n", shell_cmd);
 							}
@@ -1106,7 +1117,7 @@ int FK_RunMenu(SDL_Surface* screen)
 
 								/// ----- Shell cmd ----
 								sprintf(shell_cmd, "%s %d", SHELL_CMD_BRIGHTNESS_SET, brightness_percentage);
-								fp = popen(shell_cmd, "r");
+								fp = Platform::platformPopen(shell_cmd, "r");
 								if (fp == NULL) {
 									MENU_ERROR_PRINTF("Failed to run command %s\n", shell_cmd);
 								}
@@ -1423,21 +1434,39 @@ int FK_RunMenu(SDL_Surface* screen)
 
 #include <vector>
 #include <string>
-#include <functional>>
+#include <functional>
 
-class FunKeyMenuEntry
+#include <cassert>
+
+
+struct FunKeyMenuEntry
 {
 	std::string caption;
 	std::function<void()> lambda;
+
+	FunKeyMenuEntry(const std::string& caption, const std::function<void()>& lambda) :
+		caption(caption), lambda(lambda)
+	{ }
 };
 
 class FunKeyMenu
 {
 private:
-	std::vector<FunKeyMenuEntry> entry;
+	std::vector<FunKeyMenuEntry> entries;
+	std::vector<FunKeyMenuEntry>::iterator current;
 
 public:
+	FunKeyMenu() : current(entries.end())
+	{
 
+	}
+
+	void addMenuEntry(const std::string& caption, const std::function<void()>& lambda)
+	{
+		assert(current == entries.end());
+	  entries.emplace_back(caption, lambda);
+		current = entries.end();
+	}
 };
 
 void FK_InitMenu(fkmenu_t& handle)
