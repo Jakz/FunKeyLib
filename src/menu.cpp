@@ -30,23 +30,6 @@
 
 #include "menu.h"
 
-#if defined(_WIN32)
-struct Platform
-{
-  static FILE* platformPopen(const char* command, const char* type) { return nullptr; }
-};
-#else
-struct Platform
-{
-  static FILE* platformPopen(const char* command, const char* type) { return popen(command, type); }
-};
-#endif
-
- /// -------------- DEFINES --------------
-
-#define MIN(a,b) (((a)<(b))?(a):(b))
-#define MAX(a,b) (((a)>(b))?(a):(b))
-
 //#define MENU_DEBUG
 #define MENU_ERROR
 
@@ -62,6 +45,142 @@ struct Platform
 #define MENU_ERROR_PRINTF(...)
 #endif //MENU_ERROR
 
+#include <vector>
+#include <string>
+#include <functional>
+#include <array>
+
+using path_t = std::string;
+
+#if defined(_WIN32)
+struct Platform
+{
+  static FILE* platformPopen(const char* command, const char* type) { return nullptr; }
+  static path_t resourcePath() { return ""; }
+};
+#else
+struct Platform
+{
+  static FILE* platformPopen(const char* command, const char* type) { return popen(command, type); }
+  static path_t resourcePath() { return "/usr/games/menu_resources/"; }
+};
+#endif
+
+
+class FunKeyMenuEntry
+{
+  std::string caption;
+  std::function<void()> lambda;
+};
+
+class FunKeyMenu
+{
+private:
+  bool wasTTFInit;
+  std::vector<FunKeyMenuEntry> entry;
+
+  static constexpr int MENU_ZONE_WIDTH = 240;
+  static constexpr int MENU_ZONE_HEIGHT = 240;
+  
+  static constexpr int PADDING_Y = 18;
+
+public:
+  SDL_Surface* screen;
+  TTF_Font* fontTitle, *fontInfo, *fontSmallInfo;
+  SDL_Surface* upArrow, *downArrow;
+
+  FunKeyMenu(SDL_Surface* screen) : screen(screen), wasTTFInit(false)
+  {
+
+  }
+
+  void setScreen(SDL_Surface* screen) { this->screen = screen; }
+
+  SDL_Surface* loadImageResource(const path_t& path)
+  {
+    SDL_Surface* dest = IMG_Load((Platform::resourcePath() + path).c_str());
+    if (!dest)
+      MENU_ERROR_PRINTF("ERROR IMG_Load: %s\n", IMG_GetError());
+    return dest;
+  }
+
+  TTF_Font* loadFontResource(const path_t& path, int size)
+  {
+    TTF_Font* dest = TTF_OpenFont((Platform::resourcePath() + path).c_str(), size);
+    if (!dest)
+      MENU_ERROR_PRINTF("ERROR in init_menu_SDL: Could not open menu font %s, %s\n", path.c_str(), SDL_GetError());
+    return dest;
+  }
+
+  void initTTF()
+  {
+    wasTTFInit = TTF_WasInit();
+    if (!wasTTFInit)
+      TTF_Init();
+  }
+
+  void deinitTTF()
+  {
+    if (!wasTTFInit)
+      TTF_Quit();
+  }
+
+  void loadResources()
+  {
+    upArrow = loadImageResource("arrow_top.png");
+    downArrow = loadImageResource("arrow_bottom.png");
+
+    fontTitle = loadFontResource("OpenSans-Bold.ttf", 22);
+    fontInfo = loadFontResource("OpenSans-Bold.ttf", 16);
+    fontSmallInfo = loadFontResource("OpenSans-Semibold.ttf", 13);
+  }
+
+  void releaseResources()
+  {
+    SDL_FreeSurface(upArrow);
+    SDL_FreeSurface(downArrow);
+
+    TTF_CloseFont(fontTitle);
+    TTF_CloseFont(fontInfo);
+    TTF_CloseFont(fontSmallInfo);
+  }
+
+  void blitCentered(SDL_Surface* surface, int yOffset, SDL_Surface* dest)
+  {
+    SDL_Rect point;
+    point.x = (dest->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - surface->w) / 2;
+    point.y = dest->h - MENU_ZONE_HEIGHT / 2 - surface->h / 2 + PADDING_Y * yOffset;
+    SDL_BlitSurface(surface, NULL, dest, &point);
+  }
+
+  void printCentered(TTF_Font* font, const std::string& text, SDL_Color color, int yOffset, SDL_Surface* dest)
+  {
+    SDL_Surface* surface = TTF_RenderText_Blended(font, text.c_str(), color);
+    blitCentered(surface, yOffset, dest);
+    SDL_FreeSurface(surface);
+  }
+};
+
+void FK_InitMenu(fkmenu_t& handle, SDL_Surface* screen)
+{
+  FunKeyMenu* menu = new FunKeyMenu(screen);
+  handle = reinterpret_cast<uintptr_t>(menu);
+}
+
+void FK_StopMenu(fkmenu_t& handle)
+{
+  FunKeyMenu* menu = reinterpret_cast<FunKeyMenu*>(handle);
+  delete menu;
+}
+
+//TODO: stub to integrate with existing code during migration
+FunKeyMenu menu = FunKeyMenu(nullptr);
+
+ /// -------------- DEFINES --------------
+
+#define MIN(a,b) (((a)<(b))?(a):(b))
+#define MAX(a,b) (((a)>(b))?(a):(b))
+
 #define SCREEN_HORIZONTAL_SIZE      240 //RES_HW_SCREEN_HORIZONTAL
 #define SCREEN_VERTICAL_SIZE        240 //RES_HW_SCREEN_VERTICAL
 
@@ -73,16 +192,6 @@ struct Platform
 #define MENU_ZONE_HEIGHT            SCREEN_VERTICAL_SIZE
 #define MENU_BG_SQURE_WIDTH         180
 #define MENU_BG_SQUREE_HEIGHT       140
-
-#define MENU_FONT_NAME_TITLE        "/usr/games/menu_resources/OpenSans-Bold.ttf"
-#define MENU_FONT_SIZE_TITLE        22
-#define MENU_FONT_NAME_INFO         "/usr/games/menu_resources/OpenSans-Bold.ttf"
-#define MENU_FONT_SIZE_INFO         16
-#define MENU_FONT_NAME_SMALL_INFO   "/usr/games/menu_resources/OpenSans-Regular.ttf"
-#define MENU_FONT_SIZE_SMALL_INFO   13
-#define MENU_PNG_BG_PATH            "/usr/games/menu_resources/zone_bg.png"
-#define MENU_PNG_ARROW_TOP_PATH     "/usr/games/menu_resources/arrow_top.png"
-#define MENU_PNG_ARROW_BOTTOM_PATH  "/usr/games/menu_resources/arrow_bottom.png"
 
 #define GRAY_MAIN_R                 85
 #define GRAY_MAIN_G                 85
@@ -100,11 +209,6 @@ struct Platform
 static SDL_Surface* background_screen = NULL;
 static int backup_key_repeat_delay = 0;
 static int backup_key_repeat_interval = 0;
-static TTF_Font* menu_title_font = NULL;
-static TTF_Font* menu_info_font = NULL;
-static TTF_Font* menu_small_info_font = NULL;
-static SDL_Surface* img_arrow_top = NULL;
-static SDL_Surface* img_arrow_bottom = NULL;
 static SDL_Surface** menu_zone_surfaces = NULL;
 static int* idx_menus = NULL;
 static int nb_menu_zones = 0;
@@ -226,10 +330,7 @@ static void add_menu_zone(ENUM_MENU_TYPE menu_type)
   idx_menus[nb_menu_zones - 1] = menu_type;
 
   /// ------ Reinit menu surface with height increased -------
-  menu_zone_surfaces[nb_menu_zones - 1] = IMG_Load(MENU_PNG_BG_PATH);
-  if (!menu_zone_surfaces[nb_menu_zones - 1]) {
-    MENU_ERROR_PRINTF("ERROR IMG_Load: %s\n", IMG_GetError());
-  }
+  menu_zone_surfaces[nb_menu_zones - 1] = menu.loadImageResource("zone_bg.png");
 
   /// --------- Init Common Variables --------
   SDL_Surface* text_surface = NULL;
@@ -242,10 +343,7 @@ static void add_menu_zone(ENUM_MENU_TYPE menu_type)
   case MENU_TYPE_VOLUME:
     MENU_DEBUG_PRINTF("Init MENU_TYPE_VOLUME\n");
     /// ------ Text ------
-    text_surface = TTF_RenderText_Blended(menu_title_font, "VOLUME", text_color);
-    text_pos.x = (surface->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-    text_pos.y = surface->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 - padding_y_from_center_menu_zone;
-    SDL_BlitSurface(text_surface, NULL, surface, &text_pos);
+    menu.printCentered(menu.fontTitle, "VOLUME", text_color, -1, surface);
 
     x_volume_bar = (surface->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - width_progress_bar) / 2;
     y_volume_bar = surface->h - MENU_ZONE_HEIGHT / 2 - height_progress_bar / 2 + padding_y_from_center_menu_zone;
@@ -257,10 +355,7 @@ static void add_menu_zone(ENUM_MENU_TYPE menu_type)
   case MENU_TYPE_BRIGHTNESS:
     MENU_DEBUG_PRINTF("Init MENU_TYPE_BRIGHTNESS\n");
     /// ------ Text ------
-    text_surface = TTF_RenderText_Blended(menu_title_font, "BRIGHTNESS", text_color);
-    text_pos.x = (surface->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-    text_pos.y = surface->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 - padding_y_from_center_menu_zone;
-    SDL_BlitSurface(text_surface, NULL, surface, &text_pos);
+    menu.printCentered(menu.fontTitle, "BRIGHTNESS", text_color, -1, surface);
 
     x_brightness_bar = (surface->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - width_progress_bar) / 2;
     y_brightness_bar = surface->h - MENU_ZONE_HEIGHT / 2 - height_progress_bar / 2 + padding_y_from_center_menu_zone;
@@ -271,38 +366,27 @@ static void add_menu_zone(ENUM_MENU_TYPE menu_type)
 #ifdef HAS_MENU_SAVE
   case MENU_TYPE_SAVE:
     MENU_DEBUG_PRINTF("Init MENU_TYPE_SAVE\n");
-    /// ------ Text ------
-    text_surface = TTF_RenderText_Blended(menu_title_font, "SAVE", text_color);
-    text_pos.x = (surface->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-    text_pos.y = surface->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 - padding_y_from_center_menu_zone * 2;
-    SDL_BlitSurface(text_surface, NULL, surface, &text_pos);
+    menu.printCentered(menu.fontTitle, "SAVE", text_color, -2, surface);
     break;
 #endif
 #ifdef HAS_MENU_LOAD
   case MENU_TYPE_LOAD:
     MENU_DEBUG_PRINTF("Init MENU_TYPE_LOAD\n");
-    /// ------ Text ------
-    text_surface = TTF_RenderText_Blended(menu_title_font, "LOAD", text_color);
-    text_pos.x = (surface->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-    text_pos.y = surface->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 - padding_y_from_center_menu_zone * 2;
-    SDL_BlitSurface(text_surface, NULL, surface, &text_pos);
+    menu.printCentered(menu.fontTitle, "LOAD", text_color, -2, surface);
+
     break;
 #endif
 #ifdef HAS_MENU_ASPECT_RATIO
   case MENU_TYPE_ASPECT_RATIO:
     MENU_DEBUG_PRINTF("Init MENU_TYPE_ASPECT_RATIO\n");
-    /// ------ Text ------
-    text_surface = TTF_RenderText_Blended(menu_title_font, "ASPECT RATIO", text_color);
-    text_pos.x = (surface->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-    text_pos.y = surface->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 - padding_y_from_center_menu_zone;
-    SDL_BlitSurface(text_surface, NULL, surface, &text_pos);
+    menu.printCentered(menu.fontTitle, "ASPECT RATIO", text_color, -1, surface);
     break;
 #endif
 #ifdef HAS_MENU_USB
   case MENU_TYPE_USB:
     MENU_DEBUG_PRINTF("Init MENU_TYPE_USB\n");
     /// ------ Text ------
-    text_surface = TTF_RenderText_Blended(menu_title_font, "USB", text_color);
+    text_surface = TTF_RenderText_Blended(menu.fontTitle, "USB", text_color);
     text_pos.x = (surface->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
     text_pos.y = surface->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2;
     SDL_BlitSurface(text_surface, NULL, surface, &text_pos);
@@ -312,7 +396,7 @@ static void add_menu_zone(ENUM_MENU_TYPE menu_type)
   case MENU_TYPE_THEME:
     MENU_DEBUG_PRINTF("Init MENU_TYPE_THEME\n");
     /// ------ Text ------
-    text_surface = TTF_RenderText_Blended(menu_title_font, "SET THEME", text_color);
+    text_surface = TTF_RenderText_Blended(menu.fontTitle, "SET THEME", text_color);
     text_pos.x = (surface->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
     text_pos.y = surface->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 - padding_y_from_center_menu_zone * 2;
     SDL_BlitSurface(text_surface, NULL, surface, &text_pos);
@@ -322,12 +406,12 @@ static void add_menu_zone(ENUM_MENU_TYPE menu_type)
   case MENU_TYPE_LAUNCHER:
     MENU_DEBUG_PRINTF("Init MENU_TYPE_LAUNCHER\n");
     /// ------ Text ------
-    text_surface = TTF_RenderText_Blended(menu_title_font, "SET LAUNCHER", text_color);
+    text_surface = TTF_RenderText_Blended(menu.fontTitle, "SET LAUNCHER", text_color);
     text_pos.x = (surface->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
     text_pos.y = surface->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 - padding_y_from_center_menu_zone * 2;
     SDL_BlitSurface(text_surface, NULL, surface, &text_pos);
     /// ------ Text ------
-    text_surface = TTF_RenderText_Blended(menu_title_font, "GMENU2X", text_color);
+    text_surface = TTF_RenderText_Blended(menu.fontTitle, "GMENU2X", text_color);
     text_pos.x = (surface->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
     text_pos.y = surface->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2;
     SDL_BlitSurface(text_surface, NULL, surface, &text_pos);
@@ -336,8 +420,7 @@ static void add_menu_zone(ENUM_MENU_TYPE menu_type)
 #ifdef HAS_MENU_RO_RW
   case MENU_TYPE_RO_RW:
     MENU_DEBUG_PRINTF("Init MENU_TYPE_RO_RW\n");
-    /// ------ Text ------
-    text_surface = TTF_RenderText_Blended(menu_title_font, "SET SYSTEM:", text_color);
+    text_surface = TTF_RenderText_Blended(menu.fontTitle, "SET SYSTEM:", text_color);
     text_pos.x = (surface->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
     text_pos.y = surface->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 - padding_y_from_center_menu_zone * 2;
     SDL_BlitSurface(text_surface, NULL, surface, &text_pos);
@@ -346,21 +429,14 @@ static void add_menu_zone(ENUM_MENU_TYPE menu_type)
 #ifdef HAS_MENU_EXIT
   case MENU_TYPE_EXIT:
     MENU_DEBUG_PRINTF("Init MENU_TYPE_EXIT\n");
-    /// ------ Text ------
-    text_surface = TTF_RenderText_Blended(menu_title_font, "EXIT APP", text_color);
-    text_pos.x = (surface->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-    text_pos.y = surface->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2;
-    SDL_BlitSurface(text_surface, NULL, surface, &text_pos);
+    menu.printCentered(menu.fontTitle, "EXIT APP", text_color, 0, surface);
+
     break;
 #endif
 #ifdef HAS_MENU_POWERDOWN
   case MENU_TYPE_POWERDOWN:
     MENU_DEBUG_PRINTF("Init MENU_TYPE_POWERDOWN\n");
-    /// ------ Text ------
-    text_surface = TTF_RenderText_Blended(menu_title_font, "POWERDOWN", text_color);
-    text_pos.x = (surface->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-    text_pos.y = surface->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2;
-    SDL_BlitSurface(text_surface, NULL, surface, &text_pos);
+    menu.printCentered(menu.fontTitle, "POWERDOWN", text_color, 0, surface);
     break;
 #endif
   default:
@@ -417,29 +493,9 @@ void FK_InitMenu(void)
 #endif
 {
   MENU_DEBUG_PRINTF("Init Menu\n");
-  /// ----- Loading the fonts -----
-  menu_title_font = TTF_OpenFont(MENU_FONT_NAME_TITLE, MENU_FONT_SIZE_TITLE);
-  if (!menu_title_font) {
-    MENU_ERROR_PRINTF("ERROR in init_menu_SDL: Could not open menu font %s, %s\n", MENU_FONT_NAME_TITLE, SDL_GetError());
-  }
-  menu_info_font = TTF_OpenFont(MENU_FONT_NAME_INFO, MENU_FONT_SIZE_INFO);
-  if (!menu_info_font) {
-    MENU_ERROR_PRINTF("ERROR in init_menu_SDL: Could not open menu font %s, %s\n", MENU_FONT_NAME_INFO, SDL_GetError());
-  }
-  menu_small_info_font = TTF_OpenFont(MENU_FONT_NAME_SMALL_INFO, MENU_FONT_SIZE_SMALL_INFO);
-  if (!menu_small_info_font) {
-    MENU_ERROR_PRINTF("ERROR in init_menu_SDL: Could not open menu font %s, %s\n", MENU_FONT_NAME_SMALL_INFO, SDL_GetError());
-  }
 
-  /// ------ Load arrows imgs -------
-  img_arrow_top = IMG_Load(MENU_PNG_ARROW_TOP_PATH);
-  if (!img_arrow_top) {
-    MENU_ERROR_PRINTF("ERROR IMG_Load: %s\n", IMG_GetError());
-  }
-  img_arrow_bottom = IMG_Load(MENU_PNG_ARROW_BOTTOM_PATH);
-  if (!img_arrow_bottom) {
-    MENU_ERROR_PRINTF("ERROR IMG_Load: %s\n", IMG_GetError());
-  }
+  menu.initTTF();
+  menu.loadResources();
 
 #ifdef HAS_MENU_THEME
   /// ------ Save config pointer ------
@@ -462,10 +518,9 @@ void FK_InitMenu(void)
 void FK_EndMenu(void)
 {
   MENU_DEBUG_PRINTF("End Menu \n");
-  /// ------ Close font -------
-  TTF_CloseFont(menu_title_font);
-  TTF_CloseFont(menu_info_font);
-  TTF_CloseFont(menu_small_info_font);
+
+  menu.releaseResources();
+  menu.deinitTTF();
 
   /// ------ Free Surfaces -------
   for (int i = 0; i < nb_menu_zones; i++) {
@@ -473,8 +528,6 @@ void FK_EndMenu(void)
       SDL_FreeSurface(menu_zone_surfaces[i]);
     }
   }
-  SDL_FreeSurface(img_arrow_top);
-  SDL_FreeSurface(img_arrow_bottom);
 
   /// ------ Free Menu memory and reset vars -----
   if (idx_menus) {
@@ -646,84 +699,84 @@ static void menu_screen_refresh(SDL_Surface* screen, int menuItem, int prevItem,
     case MENU_TYPE_SAVE:
       /// ---- Write slot -----
       sprintf(text_tmp, "IN SLOT   < %d >", savestate_slot + 1);
-      text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
-      text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-      text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2;
-      SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
+      menu.printCentered(menu.fontInfo, text_tmp, text_color, 0, screen);
 
       if (menu_action) {
         sprintf(text_tmp, "Saving...");
-        text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
+        text_surface = TTF_RenderText_Blended(menu.fontInfo, text_tmp, text_color);
       }
       else {
         if (menu_confirmation) {
           sprintf(text_tmp, "Are you sure?");
-          text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
+          text_surface = TTF_RenderText_Blended(menu.fontInfo, text_tmp, text_color);
         }
         else {
           /// ---- Write current Save state ----
         }
       }
-      text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-      text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + 2 * padding_y_from_center_menu_zone;
-      SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
+
+      if (text_surface)
+      {
+        text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
+        text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + 2 * padding_y_from_center_menu_zone;
+        SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
+      }
       break;
 #endif
 #ifdef HAS_MENU_LOAD
     case MENU_TYPE_LOAD:
       /// ---- Write slot -----
       sprintf(text_tmp, "FROM SLOT   < %d >", savestate_slot + 1);
-      text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
-      text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-      text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2;
-      SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
+      menu.printCentered(menu.fontInfo, text_tmp, text_color, 0, screen);
+
 
       if (menu_action) {
         sprintf(text_tmp, "Loading...");
-        text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
+        text_surface = TTF_RenderText_Blended(menu.fontInfo, text_tmp, text_color);
       }
       else {
         if (menu_confirmation) {
           sprintf(text_tmp, "Are you sure?");
-          text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
+          text_surface = TTF_RenderText_Blended(menu.fontInfo, text_tmp, text_color);
         }
         else {
           /// ---- Write current Load state ----
         }
       }
-      text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-      text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + 2 * padding_y_from_center_menu_zone;
-      SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
+
+      if (text_surface)
+      {
+        text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
+        text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + 2 * padding_y_from_center_menu_zone;
+        SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
+      }
       break;
 #endif
 #ifdef HAS_MENU_ASPECT_RATIO
     case MENU_TYPE_ASPECT_RATIO:
       sprintf(text_tmp, "<   %s   >", aspect_ratio_name[aspect_ratio]);
-      text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
-      text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-      text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + padding_y_from_center_menu_zone;
-      SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
+      menu.printCentered(menu.fontInfo, text_tmp, text_color, +1, screen);
       break;
 #endif
 #ifdef HAS_MENU_USB
     case MENU_TYPE_USB:
       /// ---- Write slot -----
       sprintf(text_tmp, "%s USB", usb_sharing ? "EJECT" : "MOUNT");
-      text_surface = TTF_RenderText_Blended(menu_title_font, text_tmp, text_color);
+      text_surface = TTF_RenderText_Blended(menu.fontTitle, text_tmp, text_color);
       text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
       text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2;
       SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
 
       if (menu_action) {
         sprintf(text_tmp, "in progress ...");
-        text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
+        text_surface = TTF_RenderText_Blended(menu.fontInfo, text_tmp, text_color);
         text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
         text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + 2 * padding_y_from_center_menu_zone;
         SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
       }
       else if (menu_confirmation) {
         sprintf(text_tmp, "Are you sure?");
-        text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
+        text_surface = TTF_RenderText_Blended(menu.fontInfo, text_tmp, text_color);
         text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
         text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + 2 * padding_y_from_center_menu_zone;
         SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
@@ -745,21 +798,21 @@ static void menu_screen_refresh(SDL_Surface* screen, int menuItem, int prevItem,
       }
       sprintf(text_tmp, "< %s%s >", curLayoutName, dots ? "..." : "");
 
-      text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
+      text_surface = TTF_RenderText_Blended(menu.fontInfo, text_tmp, text_color);
       text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
       text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2;
       SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
 
       if (menu_action) {
         sprintf(text_tmp, "In progress...");
-        text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
+        text_surface = TTF_RenderText_Blended(menu.fontInfo, text_tmp, text_color);
         text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
         text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + 2 * padding_y_from_center_menu_zone;
         SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
       }
       else if (menu_confirmation) {
         sprintf(text_tmp, "Are you sure?");
-        text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
+        text_surface = TTF_RenderText_Blended(menu.fontInfo, text_tmp, text_color);
         text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
         text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + 2 * padding_y_from_center_menu_zone;
         SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
@@ -770,14 +823,14 @@ static void menu_screen_refresh(SDL_Surface* screen, int menuItem, int prevItem,
     case MENU_TYPE_LAUNCHER:
       if (menu_action) {
         sprintf(text_tmp, "In progress...");
-        text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
+        text_surface = TTF_RenderText_Blended(menu.fontInfo, text_tmp, text_color);
         text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
         text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + 2 * padding_y_from_center_menu_zone;
         SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
       }
       else if (menu_confirmation) {
         sprintf(text_tmp, "Are you sure?");
-        text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
+        text_surface = TTF_RenderText_Blended(menu.fontInfo, text_tmp, text_color);
         text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
         text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + 2 * padding_y_from_center_menu_zone;
         SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
@@ -792,44 +845,22 @@ static void menu_screen_refresh(SDL_Surface* screen, int menuItem, int prevItem,
 #endif
 #if defined(HAS_MENU_EXIT) || defined(HAS_MENU_POWERDOWN)
       if (menu_action) {
-        sprintf(text_tmp, "Shutting down...");
-        text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
-        text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-        text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + 2 * padding_y_from_center_menu_zone;
-        SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
+        menu.printCentered(menu.fontInfo, "Shutting down...", text_color, +2, screen);
       }
-      else {
-        if (menu_confirmation) {
-          sprintf(text_tmp, "Are you sure?");
-          text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
-          text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-          text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + 2 * padding_y_from_center_menu_zone;
-          SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
-        }
+      else if (menu_confirmation) {
+          menu.printCentered(menu.fontInfo, "Are you sure?", text_color, +2, screen);
       }
       break;
 #endif
 #ifdef HAS_MENU_RO_RW
     case MENU_TYPE_RO_RW:
-      sprintf(text_tmp, "%s", read_write ? "READ-ONLY" : "READ-WRITE");
-      text_surface = TTF_RenderText_Blended(menu_title_font, text_tmp, text_color);
-      text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-      text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2;
-      SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
+      menu.printCentered(menu.fontInfo, read_write ? "READ-ONLY" : "READ-WRITE", text_color, 0, screen);
 
       if (menu_action) {
-        sprintf(text_tmp, "in progress ...");
-        text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
-        text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-        text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + 2 * padding_y_from_center_menu_zone;
-        SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
+        menu.printCentered(menu.fontInfo, "in progress ...", text_color, +2, screen);
       }
       else if (menu_confirmation) {
-        sprintf(text_tmp, "Are you sure?");
-        text_surface = TTF_RenderText_Blended(menu_info_font, text_tmp, text_color);
-        text_pos.x = (screen->w - MENU_ZONE_WIDTH) / 2 + (MENU_ZONE_WIDTH - text_surface->w) / 2;
-        text_pos.y = screen->h - MENU_ZONE_HEIGHT / 2 - text_surface->h / 2 + 2 * padding_y_from_center_menu_zone;
-        SDL_BlitSurface(text_surface, NULL, screen, &text_pos);
+        menu.printCentered(menu.fontInfo, "Are you sure?", text_color, +2, screen);
       }
       else {
         ///Nothing
@@ -849,16 +880,16 @@ static void menu_screen_refresh(SDL_Surface* screen, int menuItem, int prevItem,
   if (print_arrows) {
     /// Top arrow
     SDL_Rect pos_arrow_top;
-    pos_arrow_top.x = (screen->w - img_arrow_top->w) / 2;
-    pos_arrow_top.y = (screen->h - MENU_BG_SQUREE_HEIGHT) / 4 - img_arrow_top->h / 2;
-    SDL_BlitSurface(img_arrow_top, NULL, screen, &pos_arrow_top);
+    pos_arrow_top.x = (screen->w - menu.upArrow->w) / 2;
+    pos_arrow_top.y = (screen->h - MENU_BG_SQUREE_HEIGHT) / 4 - menu.upArrow->h / 2;
+    SDL_BlitSurface(menu.upArrow, NULL, screen, &pos_arrow_top);
 
     /// Bottom arrow
     SDL_Rect pos_arrow_bottom;
-    pos_arrow_bottom.x = (screen->w - img_arrow_bottom->w) / 2;
+    pos_arrow_bottom.x = (screen->w - menu.downArrow->w) / 2;
     pos_arrow_bottom.y = screen->h -
-      (screen->h - MENU_BG_SQUREE_HEIGHT) / 4 - img_arrow_bottom->h / 2;
-    SDL_BlitSurface(img_arrow_bottom, NULL, screen, &pos_arrow_bottom);
+      (screen->h - MENU_BG_SQUREE_HEIGHT) / 4 - menu.downArrow->h / 2;
+    SDL_BlitSurface(menu.downArrow, NULL, screen, &pos_arrow_bottom);
   }
 
   /// --------- Flip Screen ----------
@@ -868,6 +899,8 @@ static void menu_screen_refresh(SDL_Surface* screen, int menuItem, int prevItem,
 
 int FK_RunMenu(SDL_Surface* screen)
 {
+  menu.setScreen(screen);
+  
   MENU_DEBUG_PRINTF("Run Menu\n");
 
   SDL_Event event;
@@ -1322,7 +1355,7 @@ int FK_RunMenu(SDL_Surface* screen)
 
                             /// ----- Shell cmd ----
                             sprintf(shell_cmd, "%s", SHELL_CMD_POWERDOWN);
-                            fp = popen(shell_cmd, "r");
+                            fp = Platform::platformPopen(shell_cmd, "r");
                             if (fp == NULL) {
                               MENU_ERROR_PRINTF("Failed to run command %s\n", shell_cmd);
                             }
@@ -1431,35 +1464,4 @@ int FK_RunMenu(SDL_Surface* screen)
   }
   MENU_DEBUG_PRINTF("Leave Menu\n");
   return returnCode;
-}
-
-#include <vector>
-#include <string>
-#include <functional>>
-
-class FunKeyMenuEntry
-{
-  std::string caption;
-  std::function<void()> lambda;
-};
-
-class FunKeyMenu
-{
-private:
-  std::vector<FunKeyMenuEntry> entry;
-
-public:
-
-};
-
-void FK_InitMenu(fkmenu_t& handle)
-{
-  FunKeyMenu* menu = new FunKeyMenu();
-  handle = reinterpret_cast<uintptr_t>(menu);
-}
-
-void FK_StopMenu(fkmenu_t& handle)
-{
-  FunKeyMenu* menu = reinterpret_cast<FunKeyMenu*>(handle);
-  delete menu;
 }

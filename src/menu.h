@@ -42,14 +42,14 @@ extern "C" {
 
 #define HAS_MENU_VOLUME
 #define HAS_MENU_BRIGHTNESS
-  //#define HAS_MENU_SAVE
-  //#define HAS_MENU_LOAD
-  //#define HAS_MENU_ASPECT_RATIO
-  //#define HAS_MENU_USB
-  //#define HAS_MENU_THEME
-  //#define HAS_MENU_LAUNCHER
+#define HAS_MENU_SAVE
+#define HAS_MENU_LOAD
+#define HAS_MENU_ASPECT_RATIO
+//#define HAS_MENU_USB
+//#define HAS_MENU_THEME
+//#define HAS_MENU_LAUNCHER
 #define HAS_MENU_EXIT
-//#define HAS_MENU_POWERDOWN
+#define HAS_MENU_POWERDOWN
 #define HAS_MENU_RO_RW
 
   typedef enum {

@@ -1,6 +1,7 @@
 #include <stdio.h>
-
 #include <SDL/SDL.h>
+
+#include "menu.h"
 
 FILE* __cdecl __iob_func(void)
 {
@@ -30,6 +31,11 @@ int main(int argc, char* argv[])
         {
           if (event.key.keysym.sym == SDLK_ESCAPE)
             exit = 1;
+        }
+        case SDLK_h:
+        {
+          FK_InitMenu();
+          FK_RunMenu(surface);
         }
       }
     }
